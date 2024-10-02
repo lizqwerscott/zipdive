@@ -1,0 +1,19 @@
+[package]
+name = "zipdive"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.89"
+walkdir = "2.5.0"
+futures = "0.3"
+tokio = { version = "1", features = ["full"] }
+iced = "0.13.1"
+rfd = "0.15.0"
+
+[dev-dependencies]
+tokio-test = "*"
+
+[[bin]]
+  name = "zipdive"
+  path = "./src/main.rs"
