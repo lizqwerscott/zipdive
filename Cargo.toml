@@ -11,6 +11,8 @@ rfd = "0.15.0"
 
 [dev-dependencies]
 tokio-test = "*"
+assert_fs = "*"
+zip = "0.6"
 
 [[bin]]
   name = "zipdive"

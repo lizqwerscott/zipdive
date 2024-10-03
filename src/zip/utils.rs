@@ -93,6 +93,13 @@ pub fn change_path_root(old_root: &Path, path: &Path, new_root: &Path) -> PathBu
 mod zip_test {
     use super::*;
 
+    use assert_fs::prelude::*;
+
+    use std::fs::File;
+    use std::io::{self, Read, Write};
+    use std::path::{Path, PathBuf};
+    use zip::{result::ZipResult, write::FileOptions, CompressionMethod, ZipWriter};
+
     macro_rules! aw {
         ($e:expr) => {
             tokio_test::block_on($e)
@@ -101,15 +108,22 @@ mod zip_test {
 
     #[test]
     fn test_collect_compressed() -> Result<(), Error> {
-        let mut zip_dirs: Vec<&str> = Vec::new();
-        zip_dirs.push("/home/lizqwer/TempProject/zipdive/source");
+        let temp_project = assert_fs::TempDir::new().unwrap();
+        let _archive_file = temp_project
+            .child("test")
+            .child("archive.tar.gz")
+            .write_binary(&[]) // 创建一个空的 tar.gz 文件
+            .unwrap();
 
-        for zip_dir in zip_dirs {
-            let zip_dir = Path::new(zip_dir);
-            let files = collect_compressed_files_in_dir(zip_dir)?;
-            println!("zip_dir: {:?}", zip_dir);
-            println!("{:?}", files);
-        }
+        let found_files = collect_compressed_files_in_dir(temp_project.path())?;
+        assert!(!found_files.is_empty());
+
+        found_files.into_iter().for_each(|file| {
+            let ext = file.extension().unwrap_or_default();
+            assert_eq!(ext, "gz");
+        });
+
+        temp_project.close().unwrap();
 
         Ok(())
     }
@@ -140,13 +154,63 @@ mod zip_test {
         Ok(())
     }
 
+    fn create_zip_file(zip_file_path: &Path, files_to_compress: Vec<PathBuf>) -> ZipResult<()> {
+        let zip_file = File::create(&zip_file_path)?;
+
+        let mut zip = ZipWriter::new(zip_file);
+
+        // Set compression options (e.g., compression method)
+        let options = FileOptions::default().compression_method(CompressionMethod::DEFLATE);
+
+        // Iterate through the files and add them to the ZIP archive.
+        for file_path in &files_to_compress {
+            let file = File::open(file_path)?;
+            let file_name = file_path.file_name().unwrap().to_str().unwrap();
+
+            // Adding the file to the ZIP archive.
+            zip.start_file(file_name, options)?;
+
+            let mut buffer = Vec::new();
+            io::copy(&mut file.take(u64::MAX), &mut buffer)?;
+
+            zip.write_all(&buffer)?;
+        }
+
+        zip.finish()?;
+
+        Ok(())
+    }
+
     #[test]
     fn test_unzip_dir() -> Result<(), Error> {
-        let source_dir = Path::new("/home/lizqwer/TempProject/zipdive/source");
-        let target_dir = Path::new("/home/lizqwer/TempProject/zipdive/output");
+        let temp_project = assert_fs::TempDir::new().unwrap();
+        temp_project.child("source").create_dir_all().unwrap();
+        temp_project.child("output").create_dir_all().unwrap();
 
-        aw!(unzip_dir(source_dir, target_dir, None))?;
+        temp_project
+            .child("source")
+            .child("test_str.txt")
+            .write_str("hello")
+            .unwrap();
 
+        let test_file = temp_project.path().join("source").join("test_str.txt");
+        let zip_path = temp_project.path().join("source").join("file.zip");
+        create_zip_file(&zip_path, vec![test_file]).unwrap();
+
+        let source_dir = temp_project.path().join("source");
+        let output_dir = temp_project.path().join("output");
+
+        aw!(unzip_dir(&source_dir, &output_dir, None))?;
+
+        let res_test_str_file = temp_project
+            .path()
+            .join("output")
+            .join("file")
+            .join("test_str.txt");
+        println!("res_test_str_file: {}", res_test_str_file.display());
+        assert!(res_test_str_file.exists());
+
+        temp_project.close().unwrap();
         Ok(())
     }
 }
