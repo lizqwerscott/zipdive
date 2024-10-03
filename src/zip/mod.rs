@@ -14,7 +14,7 @@ use utils::{change_path_root, collect_compressed_files_in_dir, unzip_file};
 pub enum Progress {
     EmptyZips,
     Searching { zip_files: Vec<PathBuf> },
-    Zipping { file: PathBuf },
+    Zipping { file_id: usize },
     Finished,
 }
 
@@ -48,7 +48,7 @@ fn unzip_dir_s(
             })
             .await;
 
-        for compressed_file in compressed_files {
+        for (index, compressed_file) in compressed_files.iter().enumerate() {
             // generate new dir
             let file_base_name = compressed_file.file_stem().unwrap();
 
@@ -63,11 +63,7 @@ fn unzip_dir_s(
             // unzip to output_dir
             unzip_file(&compressed_file, &output_dir, default_password.clone()).await?;
 
-            let _ = output
-                .send(Progress::Zipping {
-                    file: compressed_file,
-                })
-                .await;
+            let _ = output.send(Progress::Zipping { file_id: index }).await;
         }
 
         let _ = output.send(Progress::Finished).await;

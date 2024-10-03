@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use iced::alignment::{Alignment, Horizontal};
 use iced::widget::checkbox;
@@ -25,23 +25,37 @@ pub enum Message {
 }
 
 struct ZipFile {
-    name: String,
-    path: PathBuf,
+    show_path: PathBuf,
+    run_finish: bool,
 }
 
 impl ZipFile {
-    fn new(name: String, path: PathBuf) -> Self {
-        Self { name, path }
+    fn new(path: PathBuf, parent: PathBuf) -> Self {
+        let mut components = path.components();
+        let mut parent_components = parent.components();
+
+        while parent_components.as_path() != Path::new("")
+            && components
+                .as_path()
+                .starts_with(parent_components.as_path())
+        {
+            components.next();
+            parent_components.next();
+        }
+
+        Self {
+            show_path: components.as_path().to_path_buf(),
+            run_finish: false,
+        }
     }
 
     fn view(&self) -> Element<Message> {
-        text(format!(
-            "{}: {}",
-            self.name,
-            self.path.display().to_string()
-        ))
-        .width(Length::Fill)
-        .shaping(text::Shaping::Advanced)
+        row![
+            checkbox("", self.run_finish),
+            text(format!("{}", self.show_path.display(),))
+                .width(Length::Fill)
+                .shaping(text::Shaping::Advanced),
+        ]
         .into()
     }
 }
@@ -52,6 +66,7 @@ struct ZipFiles {
     zip_files: Vec<ZipFile>,
     depth: usize,
     state: ZipsHandleState,
+    finish_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +98,7 @@ impl ZipFiles {
             zip_files: Vec::new(),
             depth,
             state: ZipsHandleState::Searching,
+            finish_count: 0,
         }
     }
 
@@ -91,16 +107,17 @@ impl ZipFiles {
             ZipsHandleState::Searching | ZipsHandleState::Zipping => match new_progress {
                 Ok(progress) => match progress {
                     Progress::Finished => self.state = ZipsHandleState::Finished,
-                    Progress::Zipping { file } => {}
+                    Progress::Zipping { file_id } => {
+                        self.zip_files[file_id].run_finish = true;
+                        self.finish_count += 1;
+                    }
                     Progress::EmptyZips => {
                         self.state = ZipsHandleState::EmptyZips;
                     }
                     Progress::Searching { zip_files } => {
                         for zip_file in zip_files {
-                            let file_name = zip_file.file_name().unwrap().to_str().unwrap();
-
                             self.zip_files
-                                .push(ZipFile::new(String::from(file_name), zip_file));
+                                .push(ZipFile::new(zip_file, self.input_path.clone()));
                         }
                         self.state = ZipsHandleState::Zipping;
                     }
@@ -126,17 +143,21 @@ impl ZipFiles {
 
     fn view(&self) -> Element<Message> {
         let title_str = format!(
-            "第 {} 层: 压缩文件数量: {} 状态: {}",
+            "第 {} 层: 压缩文件: {}/{} 状态: {}",
             self.depth,
+            self.finish_count,
             self.zip_files.len(),
             self.state.to_string()
         );
 
+        let path_str = format!("{}", self.input_path.display());
+
         let deepth_title = text(title_str).shaping(text::Shaping::Advanced);
+        let deepth_path = text(path_str).shaping(text::Shaping::Advanced);
 
         let zip_files = Column::with_children(self.zip_files.iter().map(ZipFile::view));
 
-        column![deepth_title, zip_files].into()
+        column![deepth_title, deepth_path, zip_files].into()
     }
 }
 
