@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use iced::alignment::{Alignment, Horizontal};
 use iced::widget::checkbox;
 use iced::{
-    widget::{button, center, column, container, row, text, text_input, Column, Row},
+    widget::{button, center, column, container, progress_bar, row, text, text_input, Column, Row},
     Element, Length, Subscription, Task,
 };
 use rfd::FileDialog;
@@ -165,17 +165,19 @@ impl ZipFiles {
     }
 
     fn view(&self) -> Element<Message> {
-        let title_str = format!(
-            "第 {} 层: 压缩文件: {}/{} 状态: {}",
-            self.depth,
-            self.finish_count,
-            self.zip_files.len(),
-            self.state.to_string()
-        );
+        let title_str = format!("第 {} 层: {}", self.depth, self.state.to_string(),);
 
         let path_str = format!("{}", self.input_path.display());
 
-        let deepth_title = text(title_str).shaping(text::Shaping::Advanced);
+        let deepth_title = row![
+            text(title_str).shaping(text::Shaping::Advanced),
+            progress_bar(0.0..=self.zip_files.len() as f32, self.finish_count as f32),
+            text(format!("{}/{}", self.finish_count, self.zip_files.len()))
+                .shaping(text::Shaping::Advanced)
+        ]
+        .align_y(Alignment::Center)
+        .spacing(3);
+
         let deepth_path = text(path_str).shaping(text::Shaping::Advanced);
 
         let zip_files = Column::with_children(self.zip_files.iter().map(ZipFile::view)).spacing(5);
