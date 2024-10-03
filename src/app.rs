@@ -26,7 +26,14 @@ pub enum Message {
 
 struct ZipFile {
     show_path: PathBuf,
-    run_finish: bool,
+    state: ZipFileHandleState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ZipFileHandleState {
+    Running,
+    Finished,
+    Error,
 }
 
 impl ZipFile {
@@ -45,13 +52,20 @@ impl ZipFile {
 
         Self {
             show_path: components.as_path().to_path_buf(),
-            run_finish: false,
+            state: ZipFileHandleState::Running,
         }
     }
 
     fn view(&self) -> Element<Message> {
+        let start_icon: Element<Message> = match self.state {
+            ZipFileHandleState::Running | ZipFileHandleState::Finished => {
+                checkbox("", self.state == ZipFileHandleState::Finished).into()
+            }
+            ZipFileHandleState::Error => text("❌").shaping(text::Shaping::Advanced).into(),
+        };
+
         row![
-            checkbox("", self.run_finish),
+            start_icon,
             text(format!("{}", self.show_path.display(),))
                 .width(Length::Fill)
                 .shaping(text::Shaping::Advanced),
@@ -107,8 +121,17 @@ impl ZipFiles {
             ZipsHandleState::Searching | ZipsHandleState::Zipping => match new_progress {
                 Ok(progress) => match progress {
                     Progress::Finished => self.state = ZipsHandleState::Finished,
-                    Progress::Zipping { file_id } => {
-                        self.zip_files[file_id].run_finish = true;
+                    Progress::Zipping { file_id, state } => {
+                        match state {
+                            Ok(()) => {
+                                self.zip_files[file_id].state = ZipFileHandleState::Finished;
+                            }
+                            Err(e) => {
+                                self.zip_files[file_id].state = ZipFileHandleState::Error;
+                                println!("Error: {}", e);
+                            }
+                        }
+
                         self.finish_count += 1;
                     }
                     Progress::EmptyZips => {
@@ -155,7 +178,7 @@ impl ZipFiles {
         let deepth_title = text(title_str).shaping(text::Shaping::Advanced);
         let deepth_path = text(path_str).shaping(text::Shaping::Advanced);
 
-        let zip_files = Column::with_children(self.zip_files.iter().map(ZipFile::view));
+        let zip_files = Column::with_children(self.zip_files.iter().map(ZipFile::view)).spacing(5);
 
         column![deepth_title, deepth_path, zip_files].into()
     }

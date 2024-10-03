@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 walkdir = "2.5.0"
-futures = "0.3"
-iced = "0.13.1"
+iced = { version = "0.13.1", features = ["tokio"]}
 rfd = "0.15.0"
+tokio = { version = "1.40.0", features = ["rt"] }
 
 [dev-dependencies]
 tokio-test = "*"
