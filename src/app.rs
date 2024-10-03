@@ -2,6 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use iced::alignment::{Alignment, Horizontal};
+use iced::widget::checkbox;
 use iced::{
     widget::{button, center, column, container, row, text, text_input, Column, Row},
     Element, Length, Subscription, Task,
@@ -20,6 +21,7 @@ pub enum Message {
     Start,
     ZipFileHandleProgress((usize, Result<Progress, Error>)),
     Next,
+    AutoRunCheckboxToggled(bool),
 }
 
 struct ZipFile {
@@ -58,6 +60,7 @@ enum ZipsHandleState {
     Zipping,
     Finished,
     Error,
+    EmptyZips,
 }
 
 impl fmt::Display for ZipsHandleState {
@@ -67,6 +70,7 @@ impl fmt::Display for ZipsHandleState {
             ZipsHandleState::Zipping => write!(f, "解压中"),
             ZipsHandleState::Finished => write!(f, "完成"),
             ZipsHandleState::Error => write!(f, "错误"),
+            ZipsHandleState::EmptyZips => write!(f, "没有压缩文件"),
         }
     }
 }
@@ -88,6 +92,9 @@ impl ZipFiles {
                 Ok(progress) => match progress {
                     Progress::Finished => self.state = ZipsHandleState::Finished,
                     Progress::Zipping { file } => {}
+                    Progress::EmptyZips => {
+                        self.state = ZipsHandleState::EmptyZips;
+                    }
                     Progress::Searching { zip_files } => {
                         for zip_file in zip_files {
                             let file_name = zip_file.file_name().unwrap().to_str().unwrap();
@@ -139,7 +146,8 @@ pub struct ZipDive {
     password: String,
     zip_files: Vec<ZipFiles>,
     now_run_zip_files: usize,
-    run_status: bool,
+    auto_run: bool,
+    all_finish: bool,
 }
 
 impl ZipDive {
@@ -151,10 +159,25 @@ impl ZipDive {
                 password: String::from(""),
                 zip_files: Vec::new(),
                 now_run_zip_files: 0,
-                run_status: false,
+                auto_run: false,
+                all_finish: false,
             },
             Task::none(),
         )
+    }
+
+    fn next_zip_files(&mut self) {
+        self.now_run_zip_files += 1;
+
+        let input_path = self
+            .output_path
+            .join(format!("{}", self.now_run_zip_files - 1));
+        let output_path = self.output_path.join(format!("{}", self.now_run_zip_files));
+        self.zip_files.push(ZipFiles::new(
+            input_path,
+            output_path,
+            self.now_run_zip_files,
+        ));
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -192,11 +215,10 @@ impl ZipDive {
                 Task::none()
             }
             Message::Start => {
-                if self.run_status {
+                if self.now_run_zip_files > 0 {
                     println!("已经处于运行状态");
                 } else {
                     self.now_run_zip_files = 1;
-                    self.run_status = true;
 
                     // 创建第一层的输出目录
                     let output_path = self.output_path.join("1");
@@ -205,18 +227,51 @@ impl ZipDive {
                         output_path,
                         self.now_run_zip_files,
                     ));
-                    // 启动
-                    // 开始搜索第一个层级 unzip_dir 函数
-                    // 当搜索完压缩文件之后，发送 message 告知，之后开始解压，解压完毕后发送 message 告知
                 }
 
                 Task::none()
             }
-            Message::Next => Task::none(),
+            Message::Next => {
+                if !self.all_finish {
+                    if !self.auto_run {
+                        if let Some(last_zip_files) = self.zip_files.last() {
+                            match last_zip_files.state {
+                                ZipsHandleState::Finished => {
+                                    self.next_zip_files();
+                                }
+                                ZipsHandleState::EmptyZips => {
+                                    println!("已经搜索到最后一层，无法进行下一层解压");
+                                }
+                                _ => {
+                                    println!("上一层解压未完成，无法进行下一层解压");
+                                }
+                            }
+                        }
+                    } else {
+                        println!("处于自动运行模式，无需手动操作");
+                    }
+                } else {
+                    println!("递归解压完成");
+                }
+
+                Task::none()
+            }
             Message::ZipFileHandleProgress((id, progress)) => {
                 if let Some(zip_file) = self.zip_files.get_mut(id - 1) {
                     zip_file.progress(progress);
+                    if self.auto_run {
+                        match zip_file.state {
+                            ZipsHandleState::Finished => {
+                                self.next_zip_files();
+                            }
+                            _ => {}
+                        }
+                    }
                 }
+                Task::none()
+            }
+            Message::AutoRunCheckboxToggled(auto_run) => {
+                self.auto_run = auto_run;
                 Task::none()
             }
         }
@@ -254,6 +309,8 @@ impl ZipDive {
 
         let start_button = button("Start").on_press(Message::Start);
         let next_button = button("Next").on_press(Message::Next);
+        let auto_run_checkbox =
+            checkbox("AutoRun", self.auto_run).on_toggle(Message::AutoRunCheckboxToggled);
 
         let controls = row![
             column![
@@ -280,7 +337,7 @@ impl ZipDive {
                 ]
                 .align_y(Alignment::Center)
                 .spacing(10),
-                row![start_button, next_button]
+                row![start_button, next_button, auto_run_checkbox]
                     .align_y(Alignment::Center)
                     .spacing(10)
             ]

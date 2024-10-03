@@ -12,6 +12,7 @@ use utils::{change_path_root, collect_compressed_files_in_dir, unzip_file};
 
 #[derive(Debug, Clone)]
 pub enum Progress {
+    EmptyZips,
     Searching { zip_files: Vec<PathBuf> },
     Zipping { file: PathBuf },
     Finished,
@@ -36,6 +37,11 @@ fn unzip_dir_s(
 ) -> impl Stream<Item = Result<Progress, Error>> {
     try_channel(1, move |mut output| async move {
         let compressed_files = collect_compressed_files_in_dir(&source_dir)?;
+        if compressed_files.is_empty() {
+            let _ = output.send(Progress::EmptyZips).await;
+
+            return Ok(());
+        }
         let _ = output
             .send(Progress::Searching {
                 zip_files: compressed_files.clone(),
