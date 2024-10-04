@@ -41,7 +41,25 @@ pub async fn unzip_file(
 ) -> Result<(), Error> {
     let output = match std::env::consts::OS {
         "windows" => {
-            return Err(Error::SystemNotSupport);
+            // bandzip
+            let password_command = if let Some(password) = password {
+                format!("-p:\"{}\"", password)
+            } else {
+                String::from("")
+            };
+
+            // TODO: 有密码的压缩文件如果不输入密码的话，不会报错，直接退出
+            let command = format!(
+                "Bandizip.exe x -y {} -o:\"{}\" \"{}\"",
+                password_command,
+                file_path.display(),
+                output_dir.display()
+            );
+
+            Command::new("powershell.exe")
+                .arg("-c")
+                .arg(command)
+                .output()?
         }
         "linux" | "macos" => {
             let mut command = format!(
@@ -54,6 +72,7 @@ pub async fn unzip_file(
                 command = format!("{} -p \"{}\"", command, password);
             }
 
+            // TODO: 有密码的压缩文件如果不输入密码的话，会卡住，需要处理并且报错
             Command::new("bash").arg("-c").arg(command).output()?
         }
         _ => {
