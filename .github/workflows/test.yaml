@@ -43,12 +43,10 @@ jobs:
     - name: Build
       uses: actions-rs/cargo@v1
       with:
-        use-cross: true
         command: build
-        args: --verbose --release --target ${{ matrix.target }}
+        args: --verbose --release
     - name: Run tests
       uses: actions-rs/cargo@v1
       with:
-        use-cross: true
         command: test
-        args: --verbose --target ${{ matrix.target }}
+        args: --verbose
