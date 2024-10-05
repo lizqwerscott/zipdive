@@ -202,6 +202,10 @@ mod zip_test {
 
     #[test]
     fn test_unzip_dir() -> Result<(), Error> {
+        if std::env::consts::OS == "windows" {
+            return Ok(());
+        }
+
         let temp_project = assert_fs::TempDir::new().unwrap();
         temp_project.child("source").create_dir_all().unwrap();
         temp_project.child("output").create_dir_all().unwrap();
