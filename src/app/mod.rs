@@ -127,6 +127,7 @@ impl ZipDive {
                             return Task::none();
                         }
 
+                        self.zip_files.clear();
                         self.now_run_zip_files = 1;
                         self.state = State::Running;
 
