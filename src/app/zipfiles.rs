@@ -153,6 +153,7 @@ impl ZipFiles {
     }
 
     pub fn view(&self) -> Element<Message> {
+        // TODO: 每一层输出目录提供打开和复制
         let title_str = format!("第 {} 层: {}", self.depth, self.state.to_string(),);
 
         let path_str = format!("{}", self.input_path.display());

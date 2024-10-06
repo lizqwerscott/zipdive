@@ -6,6 +6,7 @@ use walkdir::WalkDir;
 use crate::error::Error;
 
 fn is_compressed_file(file: &Path) -> bool {
+    // TODO: 支持其他后缀名压缩文件自动识别
     // 分为两种方法，一种使用后缀名，一种使用文件头
 
     let ext = file.extension().unwrap_or_default();
@@ -20,6 +21,8 @@ fn is_compressed_file(file: &Path) -> bool {
 }
 
 pub fn collect_compressed_files_in_dir(search_dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    // TODO: 支持检测分卷压缩, 合并为同一项
+
     if !search_dir.exists() {
         return Err(Error::FileNotExists(search_dir.to_path_buf()));
     }
